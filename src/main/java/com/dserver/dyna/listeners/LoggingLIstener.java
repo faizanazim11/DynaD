@@ -18,18 +18,21 @@ public class LoggingLIstener implements ApplicationListener<ApplicationEvent>, O
     public void onApplicationEvent(ApplicationEvent event) {
         if (event instanceof ApplicationEnvironmentPreparedEvent)
         {
+            // Fetch environment properties
             ConfigurableEnvironment environment = ((ApplicationEnvironmentPreparedEvent) event).getEnvironment();
             String logPath = environment.getProperty("logging.file.path");
             if (logPath == null || logPath.isEmpty())
             {
                 logPath = "logs";
             }
+            // Set Log Path either with default(logs) or from properties
             System.setProperty("log.path", logPath);
             String appName = environment.getProperty("spring.application.name");
             if (appName == null || appName.isEmpty())
             {
                 appName = "app";
             }
+            // Set App Name either with default(app) or from properties
             System.setProperty("app.name", appName);
         }
     }
