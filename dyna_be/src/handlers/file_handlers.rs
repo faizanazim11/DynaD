@@ -19,6 +19,7 @@ fn convert_to_human_readable(system_time: SystemTime, timezone: Option<String>) 
 }
 
 fn get_files(path: String, files: &mut Vec<File>, timezone: Option<String>) -> &Vec<File> {
+    files.clear();
     let paths = fs::read_dir(path).unwrap();
     for path in paths {
         let path = path.unwrap().path();

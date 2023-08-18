@@ -4,8 +4,7 @@ import NavBar from "app/navbar";
 import ListView from "app/listview";
 import { Box } from "@mui/material";
 import FilesService from "@/services/files_service";
-import { useState } from "react";
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 
 export default function Page() {
 
