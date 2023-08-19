@@ -28,25 +28,32 @@ export const ALL_COLUMNS = {
 export default function ListView({
   files,
   setFiles,
+  directories,
+  setDirectories,
+  currentDirectory,
+  setCurrentDirectory,
 }: {
   files: Array<any>;
   setFiles: any;
+  directories: Array<any>;
+  setDirectories: any;
+  currentDirectory: any;
+  setCurrentDirectory: any;
 }) {
   const update_files = (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
     const files_service = new FilesService();
+    const currentTarget = e.currentTarget as HTMLButtonElement;
     files_service
-      .get_listing(
-        e.currentTarget
-          ? (e.currentTarget as HTMLButtonElement).getAttribute(
-              "data-path-value"
-            ) ?? ""
-          : ""
-      )
+      .get_listing(currentTarget.getAttribute("data-path-value") ?? "")
       .then((res: any[]) => {
         setFiles(res);
+        const currentRow: any =
+          JSON.parse(currentTarget.getAttribute("data-custom-row") ?? "") ?? {};
+        directories.push(currentDirectory);
+        setDirectories(directories);
+        setCurrentDirectory(currentRow ?? {});
       });
   };
-
 
   const theme = useTheme();
   const matches = useMediaQuery(theme.breakpoints.up("sm"));
@@ -100,17 +107,18 @@ export default function ListView({
       </Typography>
     );
     return (
-      isRowFolder && (
-      <Link
-        component="button"
-        underline="hover"
-        color="primary"
-        data-path-value={pathValue}
-        onClick={update_files}
-      >
-        {linkContent}
-      </Link>
-    ) || <>{linkContent}</>
+      (isRowFolder && (
+        <Link
+          component="button"
+          underline="hover"
+          color="primary"
+          data-path-value={pathValue}
+          data-custom-row={JSON.stringify(row)}
+          onClick={update_files}
+        >
+          {linkContent}
+        </Link>
+      )) || <>{linkContent}</>
     );
   };
 
