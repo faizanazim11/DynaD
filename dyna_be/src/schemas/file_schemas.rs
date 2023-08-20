@@ -24,3 +24,8 @@ pub struct FilesListRequest {
     pub path: String,
     pub tz: Option<String>,
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct GetFileRequest {
+    pub path: String,
+}

@@ -1,12 +1,16 @@
 use crate::configs::app_configs::get_base_paths;
-use crate::schemas::file_schemas::{File, FileTypes, FilesListRequest};
+use crate::schemas::file_schemas::{File, FileTypes, FilesListRequest, GetFileRequest};
+use axum::body::StreamBody;
 use axum::extract::Query;
+use axum::http::{header, StatusCode};
+use axum::response::AppendHeaders;
 use axum::{response::IntoResponse, Json};
 use chrono::{DateTime, Utc};
 use chrono_tz::{Tz, UTC};
 use std::fs;
 use std::path::Path;
 use std::time::SystemTime;
+use tokio_util::io::ReaderStream;
 
 fn convert_to_human_readable(system_time: SystemTime, timezone: Option<String>) -> String {
     let timezone: Tz = match timezone {
@@ -171,4 +175,49 @@ pub async fn get_roots(list_request: Option<Query<FilesListRequest>>) -> impl In
         };
     }
     return Json(files);
+}
+
+fn validate_path(path: String) -> bool {
+    let base_paths = get_base_paths();
+    for base_path in base_paths {
+        let base_path = Path::new(&base_path);
+        let base_path = base_path.to_str().unwrap().to_string();
+        if path.starts_with(&base_path) {
+            return true;
+        }
+    }
+    false
+}
+
+pub async fn get_file(
+    file_request: Option<Query<GetFileRequest>>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let file_request = file_request.unwrap_or_else(|| {
+        Query(GetFileRequest {
+            path: String::from(""),
+        })
+    });
+    let file_path = file_request.0.path.clone();
+    let file_path = Path::new(&file_path);
+    if !validate_path(file_path.to_str().unwrap().to_string()) {
+        return Err((
+            StatusCode::FORBIDDEN,
+            format!("Invalid path: {}", file_path.to_str().unwrap().to_string()),
+        ));
+    }
+    let file = match tokio::fs::File::open(file_path).await {
+        Ok(file) => file,
+        Err(err) => return Err((StatusCode::NOT_FOUND, format!("File not found: {}", err))),
+    };
+    let stream = ReaderStream::new(file);
+    let body = StreamBody::new(stream);
+    let attatchment = format!(
+        "attachment; filename={}",
+        file_path.file_name().unwrap().to_str().unwrap().to_string()
+    );
+    let headers = AppendHeaders([
+        (header::CONTENT_TYPE, "application/octet-stream"),
+        (header::CONTENT_DISPOSITION, attatchment.as_str()),
+    ]);
+    Ok((headers, body).into_response())
 }
