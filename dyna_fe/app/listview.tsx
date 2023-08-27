@@ -1,10 +1,11 @@
 "use client";
 
 import FilesService from "@/services/files_service";
-import { Box, Link, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { Box, IconButton, Link, Typography, useMediaQuery, useTheme } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
 import SvgIcon from "@mui/material/SvgIcon";
 import InsertDriveFileIcon from "@mui/icons-material/InsertDriveFile";
+import DownloadForOfflineIcon from "@mui/icons-material/DownloadForOffline";
 import { DataGrid, GridColDef, GridRowParams } from "@mui/x-data-grid";
 import React from "react";
 
@@ -55,6 +56,15 @@ export default function ListView({
       });
   };
 
+  const download_file = (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+    const files_service = new FilesService();
+    const currentTarget = e.currentTarget as HTMLButtonElement;
+    let file_path = currentTarget.getAttribute("data-path-value") ?? "";
+    let file_name = currentTarget.getAttribute("data-file-name") ?? "";
+    files_service.download_file(file_path, file_name);
+  };
+
+
   const theme = useTheme();
   const matches = useMediaQuery(theme.breakpoints.up("sm"));
 
@@ -66,6 +76,9 @@ export default function ListView({
 
   const isFolder = (row: any) => {
     return row.file_type === "Folder" || row.file_type === "RootFolder";
+  };
+  const isFile = (row: any) => {
+    return row.file_type === "File";
   };
 
   const next_page = ({ row }: Partial<GridRowParams>) => {
@@ -122,6 +135,17 @@ export default function ListView({
     );
   };
 
+  const table_actions = ({ row }: Partial<GridRowParams>) => {
+    const file = isFile(row);
+    const pathValue = file ? row.path : "";
+    const fileName = file ? "" : row.name;
+    return (
+      file &&
+      <IconButton aria-label="download" color="primary" data-path-value={pathValue} data-file-name={fileName} onClick={download_file}><DownloadForOfflineIcon/></IconButton>
+    );
+  };
+  
+
   const columns: GridColDef[] = [
     {
       field: "name",
@@ -142,8 +166,9 @@ export default function ListView({
       flex: 1,
     },
     {
-      field: "read_only",
-      headerName: "Read Only",
+      field: "actions",
+      headerName: "Actions",
+      renderCell: table_actions,
       flex: 1,
     },
   ];

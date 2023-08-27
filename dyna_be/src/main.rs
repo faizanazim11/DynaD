@@ -2,8 +2,9 @@ pub mod configs;
 pub mod handlers;
 pub mod routes;
 pub mod schemas;
-use axum::http::header::CONTENT_TYPE;
 use std::net::SocketAddr;
+
+use tower_http::cors::Any;
 
 use crate::routes::file_routes::files_routes;
 
@@ -22,13 +23,13 @@ async fn main() {
     axum::Server::bind(&addr)
         .serve(
             files_routes()
-                .layer(tower_http::trace::TraceLayer::new_for_http())
-                .layer(
-                    tower_http::cors::CorsLayer::new()
-                        .allow_origin(origins)
-                        .allow_methods([axum::http::Method::GET])
-                        .allow_headers([CONTENT_TYPE]),
-                )
+            .layer(
+                tower_http::cors::CorsLayer::new()
+                .allow_origin(origins)
+                .allow_methods([axum::http::Method::GET, axum::http::Method::OPTIONS, axum::http::Method::CONNECT])
+                .allow_headers(Any),
+            )
+            .layer(tower_http::trace::TraceLayer::new_for_http())
                 .into_make_service(),
         )
         .await

@@ -205,12 +205,22 @@ pub async fn get_file(
             format!("Invalid path: {}", file_path.to_str().unwrap().to_string()),
         ));
     }
+    let file_metadata = match fs::metadata(file_path).ok() {
+        Some(metadata) => metadata,
+        None => {
+            return Err((
+                StatusCode::NOT_FOUND,
+                format!("File not found: {}", file_path.to_str().unwrap().to_string()),
+            ))
+        }
+    };
     let file = match tokio::fs::File::open(file_path).await {
         Ok(file) => file,
         Err(err) => return Err((StatusCode::NOT_FOUND, format!("File not found: {}", err))),
     };
     let stream = ReaderStream::new(file);
     let body = StreamBody::new(stream);
+    let file_size = file_metadata.len().to_string();
     let attatchment = format!(
         "attachment; filename={}",
         file_path.file_name().unwrap().to_str().unwrap().to_string()
@@ -218,6 +228,9 @@ pub async fn get_file(
     let headers = AppendHeaders([
         (header::CONTENT_TYPE, "application/octet-stream"),
         (header::CONTENT_DISPOSITION, attatchment.as_str()),
+        (header::CONTENT_LENGTH, file_size.as_str()),
+        (header::CACHE_CONTROL, "no-cache"),
+        (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*"),
     ]);
     Ok((headers, body).into_response())
 }
