@@ -1,0 +1,27 @@
+# Dockerfile.distroless
+
+ARG BASE_IMAGE=rust:1.71.1-slim-buster
+
+FROM $BASE_IMAGE AS planner
+WORKDIR /usr/src/dyna_be
+RUN cargo install cargo-chef
+COPY . .
+RUN cargo chef prepare  --recipe-path recipe.json
+
+FROM $BASE_IMAGE AS cacher
+WORKDIR /usr/src/dyna_be
+RUN cargo install cargo-chef
+COPY --from=planner /usr/src/dyna_be/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+
+FROM $BASE_IMAGE AS builder
+WORKDIR /usr/src/dyna_be
+COPY . .
+# Copy over the cached dependencies
+COPY --from=cacher /usr/src/dyna_be/target target
+COPY --from=cacher $CARGO_HOME $CARGO_HOME
+RUN cargo build --release
+
+FROM gcr.io/distroless/cc-debian10
+COPY --from=builder /usr/src/dyna_be/target/release/dyna_be /
+CMD ["./dyna_be"]
