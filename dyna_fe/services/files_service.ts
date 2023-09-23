@@ -4,7 +4,6 @@ import Config from "@/config";
 export default class FilesService {
 
     http_layer?: HttpLayer;
-
     constructor() {
         this.http_layer = new HttpLayer();
     }
@@ -17,32 +16,6 @@ export default class FilesService {
         }).catch((error) => {
             console.log(error);
             return [];
-        });
-    }
-
-    public async download_file(path: string, defaultName: string) {
-        await this.http_layer?.get_data(Config.download, { path: path }, { responseType: 'blob' }).then((response) => {
-            if (response.status === 200) {
-                const url = window.URL.createObjectURL(new Blob([response.data]));
-                const link = document.createElement('a');
-                const contentDisposition = response.headers['content-disposition'];
-                let filename = defaultName;
-                if (contentDisposition) {
-                    const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
-                    const matches = filenameRegex.exec(contentDisposition);
-                    if (matches?.[1]) {
-                        filename = matches[1].replace(/['"]/g, '');
-                    }
-                }
-                link.href = url;
-                link.setAttribute('download', filename);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                window.URL.revokeObjectURL(url);
-            }
-        }).catch((error) => {
-            console.log(error);
         });
     }
 }

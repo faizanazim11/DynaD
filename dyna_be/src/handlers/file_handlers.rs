@@ -1,5 +1,7 @@
 use crate::configs::app_configs::get_base_paths;
-use crate::schemas::file_schemas::{File, FileTypes, FilesListRequest, GetFileRequest};
+use crate::schemas::file_schemas::{
+    File, FileMetadata, FileTypes, FilesListRequest, GetFileRequest,
+};
 use axum::body::StreamBody;
 use axum::extract::Query;
 use axum::http::{header, StatusCode};
@@ -12,104 +14,89 @@ use std::path::Path;
 use std::time::SystemTime;
 use tokio_util::io::ReaderStream;
 
-fn convert_to_human_readable(system_time: SystemTime, timezone: Option<String>) -> String {
-    let timezone: Tz = match timezone {
-        Some(tz) => tz.parse().unwrap_or_else(|_| UTC),
-        None => UTC,
-    };
+fn convert_to_human_readable(system_time: SystemTime, timezone: String) -> String {
+    let timezone: Tz = timezone.parse().unwrap_or(UTC);
     let datetime: DateTime<Utc> = system_time.into();
     let datetime: DateTime<Tz> = datetime.with_timezone(&timezone);
     datetime.format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
-fn get_files(path: String, files: &mut Vec<File>, timezone: Option<String>) -> &Vec<File> {
+fn safe_time_unwraper(
+    system_time: Result<SystemTime, std::io::Error>,
+    timezone: String,
+) -> Option<String> {
+    match system_time {
+        Ok(time) => Some(convert_to_human_readable(time, timezone.clone())),
+        Err(_) => None,
+    }
+}
+
+fn get_metadata_contents(
+    metadata: Option<fs::Metadata>,
+    file_type: FileTypes,
+    timezone: String,
+) -> FileMetadata {
+    match metadata {
+        Some(meta) => FileMetadata {
+            size: match file_type {
+                FileTypes::File => Some(String::from(format!(
+                    "{:.2} MB",
+                    ((meta.len() as f64) / 1024.0 / 1024.0)
+                ))),
+                _ => None,
+            },
+            modified: safe_time_unwraper(meta.modified(), timezone.clone()),
+            created: safe_time_unwraper(meta.created(), timezone.clone()),
+            accessed: safe_time_unwraper(meta.accessed(), timezone.clone()),
+            read_only: Some(meta.permissions().readonly()),
+        },
+        None => FileMetadata {
+            size: None,
+            modified: None,
+            created: None,
+            accessed: None,
+            read_only: None,
+        },
+    }
+}
+
+fn create_file(
+    name: String,
+    path: String,
+    file_type: FileTypes,
+    metadata: Option<fs::Metadata>,
+    timezone: String,
+) -> File {
+    let metadata_contents = get_metadata_contents(metadata, file_type.clone(), timezone.clone());
+    File {
+        name,
+        path,
+        file_type,
+        size: metadata_contents.size,
+        modified: metadata_contents.modified,
+        created: metadata_contents.created,
+        accessed: metadata_contents.accessed,
+        read_only: metadata_contents.read_only,
+    }
+}
+
+fn get_files(path: String, files: &mut Vec<File>, timezone: String) -> &Vec<File> {
     files.clear();
     let paths = fs::read_dir(path).unwrap();
     for path in paths {
         let path = path.unwrap().path();
         let is_dir = path.is_dir();
         let path_metadata = fs::metadata(path.as_path()).ok();
-        if is_dir {
-            let subfolder = path.file_name().unwrap().to_str().unwrap().to_string();
-            match path_metadata {
-                Some(metadata) => {
-                    let file = File {
-                        name: subfolder.clone(),
-                        path: path.as_path().to_str().unwrap().to_string(),
-                        file_type: FileTypes::Folder,
-                        size: None,
-                        modified: Some(convert_to_human_readable(
-                            metadata.modified().unwrap(),
-                            timezone.clone(),
-                        )),
-                        created: Some(convert_to_human_readable(
-                            metadata.created().unwrap(),
-                            timezone.clone(),
-                        )),
-                        accessed: Some(convert_to_human_readable(
-                            metadata.accessed().unwrap(),
-                            timezone.clone(),
-                        )),
-                        read_only: Some(metadata.permissions().readonly()),
-                    };
-                    files.push(file);
-                }
-                None => {
-                    let file = File {
-                        name: subfolder.clone(),
-                        path: path.as_path().to_str().unwrap().to_string(),
-                        file_type: FileTypes::Folder,
-                        size: None,
-                        modified: None,
-                        created: None,
-                        accessed: None,
-                        read_only: None,
-                    };
-                    files.push(file);
-                }
-            }
-            continue;
-        }
-        match path_metadata {
-            Some(metadata) => {
-                let file: File = File {
-                    name: path.file_name().unwrap().to_str().unwrap().to_string(),
-                    path: path.as_path().to_str().unwrap().to_string(),
-                    file_type: FileTypes::File,
-                    size: Some(String::from(format!(
-                        "{:.2} MB",
-                        ((metadata.len() as f64) / 1024.0 / 1024.0)
-                    ))),
-                    modified: Some(convert_to_human_readable(
-                        metadata.modified().unwrap(),
-                        timezone.clone(),
-                    )),
-                    created: Some(convert_to_human_readable(
-                        metadata.created().unwrap(),
-                        timezone.clone(),
-                    )),
-                    accessed: Some(convert_to_human_readable(
-                        metadata.accessed().unwrap(),
-                        timezone.clone(),
-                    )),
-                    read_only: Some(metadata.permissions().readonly()),
-                };
-                files.push(file);
-            }
-            None => {
-                let file: File = File {
-                    name: path.file_name().unwrap().to_str().unwrap().to_string(),
-                    path: path.as_path().to_str().unwrap().to_string(),
-                    file_type: FileTypes::File,
-                    size: None,
-                    modified: None,
-                    created: None,
-                    accessed: None,
-                    read_only: None,
-                };
-                files.push(file);
-            }
-        }
+        files.push(create_file(
+            path.file_name().unwrap().to_str().unwrap().to_string(),
+            path.to_str().unwrap().to_string(),
+            match is_dir {
+                true => FileTypes::Folder,
+                false => FileTypes::File,
+            },
+            path_metadata,
+            timezone.clone(),
+        ));
     }
     files
 }
@@ -118,13 +105,20 @@ pub async fn get_roots(list_request: Option<Query<FilesListRequest>>) -> impl In
     let base_paths = get_base_paths();
     let file_request = list_request.unwrap_or_else(|| {
         Query(FilesListRequest {
-            path: String::from(""),
+            path: Some(String::from("")),
             tz: Some(String::from("UTC")),
         })
     });
-    let file_path = file_request.0.path.clone();
-    let timezone = file_request.0.tz.clone();
+    let file_path = match file_request.0.path.clone() {
+        Some(path) => path,
+        None => String::from(""),
+    };
+    let timezone = match file_request.0.tz.clone() {
+        Some(tz) => tz,
+        None => String::from("UTC"),
+    };
     println!("file_path: {}", file_path);
+    println!("timezone: {}", timezone);
     let mut files: Vec<File> = Vec::new();
     for path in base_paths {
         let path = Path::new(&path);
@@ -136,43 +130,13 @@ pub async fn get_roots(list_request: Option<Query<FilesListRequest>>) -> impl In
             files = get_files(file_path, &mut files, timezone).to_vec();
             break;
         }
-        match path_metadata {
-            Some(metadata) => {
-                let file: File = File {
-                    name: path.file_name().unwrap().to_str().unwrap().to_string(),
-                    path: path.to_str().unwrap().to_string(),
-                    file_type: FileTypes::RootFolder,
-                    size: None,
-                    modified: Some(convert_to_human_readable(
-                        metadata.modified().unwrap(),
-                        timezone.clone(),
-                    )),
-                    created: Some(convert_to_human_readable(
-                        metadata.created().unwrap(),
-                        timezone.clone(),
-                    )),
-                    accessed: Some(convert_to_human_readable(
-                        metadata.accessed().unwrap(),
-                        timezone.clone(),
-                    )),
-                    read_only: Some(metadata.permissions().readonly()),
-                };
-                files.push(file);
-            }
-            None => {
-                let file: File = File {
-                    name: path.file_name().unwrap().to_str().unwrap().to_string(),
-                    path: path.to_str().unwrap().to_string(),
-                    file_type: FileTypes::RootFolder,
-                    size: None,
-                    modified: None,
-                    created: None,
-                    accessed: None,
-                    read_only: None,
-                };
-                files.push(file);
-            }
-        };
+        files.push(create_file(
+            path.file_name().unwrap().to_str().unwrap().to_string(),
+            path_string,
+            FileTypes::RootFolder,
+            path_metadata,
+            timezone.clone(),
+        ));
     }
     return Json(files);
 }
@@ -210,7 +174,10 @@ pub async fn get_file(
         None => {
             return Err((
                 StatusCode::NOT_FOUND,
-                format!("File not found: {}", file_path.to_str().unwrap().to_string()),
+                format!(
+                    "File not found: {}",
+                    file_path.to_str().unwrap().to_string()
+                ),
             ))
         }
     };

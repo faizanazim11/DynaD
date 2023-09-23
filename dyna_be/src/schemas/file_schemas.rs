@@ -21,11 +21,19 @@ pub struct File {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FilesListRequest {
-    pub path: String,
+    pub path: Option<String>,
     pub tz: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GetFileRequest {
     pub path: String,
+}
+
+pub struct FileMetadata {
+    pub size: Option<String>,
+    pub modified: Option<String>,
+    pub created: Option<String>,
+    pub accessed: Option<String>,
+    pub read_only: Option<bool>,
 }

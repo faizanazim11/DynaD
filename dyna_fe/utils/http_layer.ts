@@ -8,11 +8,16 @@ export default class HttpLayer {
         timeout: 1000,
     });
 
+    public get_tz(body: any = {}) {
+        body['tz'] = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        return body
+    }
+
     public async get_data(url: string, queryParams: any = {}, headers: any = {}, cookies: any = {}, body: any = {}): Promise<any> {
         return await this.axios_instance.get(url, {
-            params: queryParams,
+            params: this.get_tz(queryParams),
             headers: headers,
-            data: body,
+            data: this.get_tz(body),
         });
     }
 }

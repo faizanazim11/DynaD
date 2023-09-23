@@ -1,6 +1,7 @@
 "use client";
 
 import FilesService from "@/services/files_service";
+import FileUtils from "@/utils/file_utils";
 import { Box, IconButton, Link, Typography, useMediaQuery, useTheme } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
 import SvgIcon from "@mui/material/SvgIcon";
@@ -55,15 +56,6 @@ export default function ListView({
         setCurrentDirectory(currentRow ?? {});
       });
   };
-
-  const download_file = (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
-    const files_service = new FilesService();
-    const currentTarget = e.currentTarget as HTMLButtonElement;
-    let file_path = currentTarget.getAttribute("data-path-value") ?? "";
-    let file_name = currentTarget.getAttribute("data-file-name") ?? "";
-    files_service.download_file(file_path, file_name);
-  };
-
 
   const theme = useTheme();
   const matches = useMediaQuery(theme.breakpoints.up("sm"));
@@ -138,10 +130,10 @@ export default function ListView({
   const table_actions = ({ row }: Partial<GridRowParams>) => {
     const file = isFile(row);
     const pathValue = file ? row.path : "";
-    const fileName = file ? "" : row.name;
+    const download_link = FileUtils.get_href(pathValue);
     return (
       file &&
-      <IconButton aria-label="download" color="primary" data-path-value={pathValue} data-file-name={fileName} onClick={download_file}><DownloadForOfflineIcon/></IconButton>
+      <IconButton href={download_link} aria-label="download" color="primary" target="_blank"><DownloadForOfflineIcon/></IconButton>
     );
   };
   
@@ -174,7 +166,7 @@ export default function ListView({
   ];
 
   return (
-    <Box>
+    <Box sx={{margin:"10px"}}>
       <DataGrid
         density="compact"
         rows={files}

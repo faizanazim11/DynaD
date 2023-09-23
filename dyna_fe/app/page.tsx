@@ -30,12 +30,6 @@ export default function Page() {
     });
   }, []);
 
-  // INFO: This code is to figure out if the device is a mobile device or not.
-  // const headersList = headers();
-  // const userAgent = headersList.get('user-agent');
-  // const isMobile = RegExp(/Android|BlackBerry|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i).exec(userAgent!);
-  // return (isMobile ? <MobileNavBar/> : <DesktopNavBar/> )
-
   return (
     <Box>
       <NavBar />
